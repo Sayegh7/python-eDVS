@@ -30,33 +30,68 @@ class computationThread(QThread):
                 validEvent = (byteOne & 0x80) >> 7;
                 if validEvent == 0:
                     continue;
-                    
                 y = byteOne & 0x7f;
                 x = byteTwo & 0x7f;
-                polarity = (byteTwo & 0x80) >> 7;
-                if polarity == 1:    
-                    self.image.setPixel(x,y, QtGui.qRgb(0,0,0))   
-                else:
-                    self.image.setPixel(x,y, QtGui.qRgb(0,0,0))  
-            array = self.QImageToCvMat(self.image)
-            lines = self.detectLines(array)
-            if np.any(lines) == None:
-                self.emit(SIGNAL('reset'), self.image)
-                continue
+#                polarity = (byteTwo & 0x80) >> 7;
+                self.image.setPixel(x,y, QtGui.qRgb(0,0,0))
             self.painter.begin(self.image)
             self.painter.setPen(QColor(qRgb(0,255,0)))
 
+
+            array = self.QImageToCvMat(self.image)
+            lines = self.detectLines(array)
+            if np.any(lines) == None:
+                self.painter.end()
+                self.emit(SIGNAL('reset'), self.image)
+                continue
+            
+            left_lane = []
+            right_lane = []
             for line in lines:
                 for x1,y1,x2,y2 in line:
                     if y1 > 96 and y2 > 96:
                         if x1 <= 64 or x2 <= 64:
                             self.painter.setPen(QColor(qRgb(255,255,0)))
+                            point = []
+                            point.append(x1)
+                            point.append(y1)
+                            left_lane.append(point)
+                            point = []
+                            point.append(x2)
+                            point.append(y2)                            
+                            left_lane.append(point)
                         else:
                             self.painter.setPen(QColor(qRgb(255,0,0)))                            
+                            point = []
+                            point.append(x1)
+                            point.append(y1)
+                            right_lane.append(point)
+                            point = []
+                            point.append(x2)
+                            point.append(y2)                            
+                            right_lane.append(point)
                     else:
                         self.painter.setPen(QColor(qRgb(0,255,0)))
                     self.painter.drawLine(x1,y1,x2,y2)
+                    
+                    
+            left = np.array(left_lane)
+            if len(left) != 0:
+                [vx,vy,x,y] = cv2.fitLine(left,cv2.DIST_L2,0,0.01,0.01)
+                lefty = int((-x*vy/vx) + y)
+                righty = int(((128-x)*vy/vx)+y)
+                self.painter.setPen(QColor(qRgb(0,0,255)))
+                self.painter.drawLine(127,righty,0,lefty)
+                
+            right= np.array(right_lane)
+            
+            if len(right) != 0:
+                [vx,vy,x,y] = cv2.fitLine(right,cv2.DIST_L2,0,0.01,0.01)
+                lefty = int((-x*vy/vx) + y)
+                righty = int(((128-x)*vy/vx)+y)
+                self.painter.drawLine(127,righty,0,lefty)
             self.painter.end()
+
             self.emit(SIGNAL('reset'), self.image)
 
 
@@ -74,6 +109,7 @@ class computationThread(QThread):
         return arr
         
     def detectLines(self, im):
+        '''  Applies contours and hough transform to detect lines '''
         rows,cols = im.shape[:2]
         imgray = cv2.cvtColor(im,cv2.COLOR_BGR2GRAY)
         ret,thresh = cv2.threshold(imgray,125,255,0)
@@ -83,15 +119,15 @@ class computationThread(QThread):
         image = np.zeros((128, 128, 3), np.uint8)
         image[:] = (255, 255, 255)
         for contour in contours:
-            if(len(contour) >= 5):
-                cv2.drawContours(image, contours, contnumber, (0,0,255), 1) #draw only contour contnumber
+            if(len(contour) >= 10):
+                cv2.drawContours(image, contours, contnumber, (0,0,255), 2) #draw only contour contnumber
             contnumber+=1
                 
         gray = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
         edges = cv2.Canny(gray,50,100,apertureSize = 3)
-        minLineLength = 10
+        minLineLength = 1
         maxLineGap = 2
-        lines = cv2.HoughLinesP(edges,0.01,np.pi/180,1,minLineLength,maxLineGap)
+        lines = cv2.HoughLinesP(edges,1,np.pi/90,10,minLineLength,maxLineGap)
         return lines        
 
 class Window(QtGui.QMainWindow):
