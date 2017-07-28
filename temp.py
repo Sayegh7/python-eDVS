@@ -8,6 +8,7 @@ import sys
 from PyQt4 import QtGui
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
+import math
 
 class computationThread(QThread):
     def __init__(self):
@@ -15,10 +16,12 @@ class computationThread(QThread):
     def __del__(self):
         self.wait()
     def run(self):
-        ser = serial.Serial('COM3', 12000000, timeout=1)
+        ser = serial.Serial('COM3', 12000000, timeout=0.05)
         ser.write('E+\nE+')
         self.image = QtGui.QImage(128, 128, QtGui.QImage.Format_RGB32)
+        self.image2 = QtGui.QImage(128, 128, QtGui.QImage.Format_RGB32)
         self.painter = QPainter()
+        self.painter2 = QPainter()
 
         while ser.is_open:
             line = ser.read(4096)
@@ -32,66 +35,83 @@ class computationThread(QThread):
                     continue;
                 y = byteOne & 0x7f;
                 x = byteTwo & 0x7f;
+#                if y < 100:
+#                    continue
 #                polarity = (byteTwo & 0x80) >> 7;
                 self.image.setPixel(x,y, QtGui.qRgb(0,0,0))
+
             self.painter.begin(self.image)
             self.painter.setPen(QColor(qRgb(0,255,0)))
 
 
             array = self.QImageToCvMat(self.image)
+            
             lines = self.detectLines(array)
             if np.any(lines) == None:
                 self.painter.end()
                 self.emit(SIGNAL('reset'), self.image)
                 continue
             
-            left_lane = []
-            right_lane = []
+#            left_lane = []
+#            right_lane = []
+#            for line in lines:
+#                for x1,y1,x2,y2 in line:
+#                    if y1 > 96 and y2 > 96:
+#                        if x1 <= 64 or x2 <= 64:
+#                            self.painter.setPen(QColor(qRgb(255,255,0)))
+#                            self.painter2.setPen(QColor(qRgb(255,255,0)))
+#                            point = []
+#                            point.append(x1)
+#                            point.append(y1)
+#                            left_lane.append(point)
+#                            point = []
+#                            point.append(x2)
+#                            point.append(y2)                            
+#                            left_lane.append(point)
+#                        else:
+#                            pen = QPen()
+#                            pen.setWidth(4)
+#                            pen.setColor(QColor(qRgb(255,0,0)))
+#                            self.painter.setPen(pen)
+#                            self.painter2.setPen(pen)
+#                            point = []
+#                            point.append(x1)
+#                            point.append(y1)
+#                            right_lane.append(point)
+#                            point = []
+#                            point.append(x2)
+#                            point.append(y2)                            
+#                            right_lane.append(point)
+#                    else:
+#                        self.painter.setPen(QColor(qRgb(0,255,0)))
+#                        self.painter2.setPen(QColor(qRgb(0,255,0)))
+#                    self.painter.drawLine(x1,y1,x2,y2)
+#                    self.painter2.drawLine(x1,y1,x2,y2)
+#                    
+#
+#            left = np.array(left_lane)
+#            if len(left) != 0:
+#                [vx,vy,x,y] = cv2.fitLine(left,cv2.DIST_L2,0,0.01,0.01)
+#                lefty = int((-x*vy/vx) + y)
+#                righty = int(((128-x)*vy/vx)+y)
+#                self.painter.setPen(QColor(qRgb(0,0,255)))
+#                self.painter.drawLine(127,righty,0,lefty)
+#                
+#            right= np.array(right_lane)
+#            
+#            if len(right) != 0:
+#                [vx,vy,x,y] = cv2.fitLine(right,cv2.DIST_L2,0,0.01,0.01)
+#                lefty = int((-x*vy/vx) + y)
+#                righty = int(((128-x)*vy/vx)+y)
+#                self.painter.setPen(QColor(qRgb(0,0,255)))
+#                self.painter.drawLine(127,righty,0,lefty)
+
             for line in lines:
                 for x1,y1,x2,y2 in line:
-                    if y1 > 96 and y2 > 96:
-                        if x1 <= 64 or x2 <= 64:
-                            self.painter.setPen(QColor(qRgb(255,255,0)))
-                            point = []
-                            point.append(x1)
-                            point.append(y1)
-                            left_lane.append(point)
-                            point = []
-                            point.append(x2)
-                            point.append(y2)                            
-                            left_lane.append(point)
-                        else:
-                            self.painter.setPen(QColor(qRgb(255,0,0)))                            
-                            point = []
-                            point.append(x1)
-                            point.append(y1)
-                            right_lane.append(point)
-                            point = []
-                            point.append(x2)
-                            point.append(y2)                            
-                            right_lane.append(point)
-                    else:
-                        self.painter.setPen(QColor(qRgb(0,255,0)))
+                    self.painter.setPen(QColor(qRgb(255,0,0)))
                     self.painter.drawLine(x1,y1,x2,y2)
-                    
-                    
-            left = np.array(left_lane)
-            if len(left) != 0:
-                [vx,vy,x,y] = cv2.fitLine(left,cv2.DIST_L2,0,0.01,0.01)
-                lefty = int((-x*vy/vx) + y)
-                righty = int(((128-x)*vy/vx)+y)
-                self.painter.setPen(QColor(qRgb(0,0,255)))
-                self.painter.drawLine(127,righty,0,lefty)
-                
-            right= np.array(right_lane)
-            
-            if len(right) != 0:
-                [vx,vy,x,y] = cv2.fitLine(right,cv2.DIST_L2,0,0.01,0.01)
-                lefty = int((-x*vy/vx) + y)
-                righty = int(((128-x)*vy/vx)+y)
-                self.painter.drawLine(127,righty,0,lefty)
-            self.painter.end()
 
+            self.painter.end()
             self.emit(SIGNAL('reset'), self.image)
 
 
@@ -108,8 +128,10 @@ class computationThread(QThread):
         arr = np.array(ptr).reshape(height, width, 4)  #  Copies the data
         return arr
         
-    def detectLines(self, im):
+    def detectLines(self, img):
         '''  Applies contours and hough transform to detect lines '''
+        homographyMatrix = np.matrix('-8.42014397e-01  -9.13836156e-01   1.10386987e+02;1.22808744e-02  -3.46093934e+00   3.46141924e+02;-5.21625321e-05  -1.55665641e-02   1.00000000e+00')
+        im = cv2.warpPerspective(img, homographyMatrix, (128,128))
         rows,cols = im.shape[:2]
         imgray = cv2.cvtColor(im,cv2.COLOR_BGR2GRAY)
         ret,thresh = cv2.threshold(imgray,125,255,0)
@@ -125,26 +147,65 @@ class computationThread(QThread):
                 
         gray = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
         edges = cv2.Canny(gray,50,100,apertureSize = 3)
-        minLineLength = 1
+        minLineLength = 50
         maxLineGap = 2
         lines = cv2.HoughLinesP(edges,1,np.pi/90,10,minLineLength,maxLineGap)
         return lines        
+
+        
+        
+class rectifiedThread(QThread):
+    def __init__(self):
+        QThread.__init__(self)
+    def __del__(self):
+        self.wait()
+    def run(self):
+        self.rectifiedImage = rectifiedImage()
+
+class rectifiedImage(QtGui.QMainWindow):
+    def __init__(self):
+        super(rectifiedImage, self).__init__()
+        self.setGeometry(50,50,128*6,128*6)
+        self.setWindowTitle("Rectified Image")
+        scale = 5
+        self.graphics = QtGui.QGraphicsView(self)
+        self.graphics.setGeometry(0,0,128*6,128*6)
+        self.scene = QtGui.QGraphicsScene()
+        self.image = QtGui.QImage(128, 128, QtGui.QImage.Format_RGB32)
+        self.image.fill(QtGui.qRgb(255,255,255))
+        self.pixmap = QtGui.QGraphicsPixmapItem()
+        self.image.fill(QtGui.qRgb(127,127,127))
+        tempPixmap = QtGui.QPixmap(1,1)
+        tempPixmap.convertFromImage(self.image)
+        tempPixmap = tempPixmap.scaled(128*scale,128*scale)
+        self.pixmap.setPixmap(tempPixmap)
+        self.scene.addItem(self.pixmap)    
+        self.graphics.setScene(self.scene)
+        self.show()
+    def reset(self, image):
+        tempPixmap = QtGui.QPixmap(1,1)
+        tempPixmap.convertFromImage(image)
+        tempPixmap = tempPixmap.scaled(128*5,128*5)
+        self.pixmap.setPixmap(tempPixmap)
+
 
 class Window(QtGui.QMainWindow):
     def __init__(self):
         super(Window, self).__init__()
         self.setGeometry(50,50,128*6,128*6)
         self.setWindowTitle("eDVS Line detector")
-        scale = 5
+        self.scale = 5
+#        self.rectifiedImage = rectifiedImage()
         self.graphics = QtGui.QGraphicsView(self)
         self.graphics.setGeometry(0,0,128*6,128*6)
         self.scene = QtGui.QGraphicsScene()
         self.image = QtGui.QImage(128, 128, QtGui.QImage.Format_RGB32)
+        self.image2 = QtGui.QImage(128, 128, QtGui.QImage.Format_RGB32)
         self.pixmap = QtGui.QGraphicsPixmapItem()
         self.image.fill(QtGui.qRgb(127,127,127))
         tempPixmap = QtGui.QPixmap(1,1)
         tempPixmap.convertFromImage(self.image)
-        tempPixmap = tempPixmap.scaled(128*scale,128*scale)
+        tempPixmap = tempPixmap.scaled(128*self.scale,128*self.scale)
         self.pixmap.setPixmap(tempPixmap)
         self.scene.addItem(self.pixmap)    
         self.graphics.setScene(self.scene)
@@ -155,9 +216,35 @@ class Window(QtGui.QMainWindow):
     def reset(self, image):
         tempPixmap = QtGui.QPixmap(1,1)
         tempPixmap.convertFromImage(image)
-        tempPixmap = tempPixmap.scaled(128*5,128*5)
+        tempPixmap = tempPixmap.scaled(128*self.scale,128*self.scale)
         self.pixmap.setPixmap(tempPixmap)
-        
+#        self.rectify(image)
+    def rectify(self, image):
+        x = 0;
+        y = 100;
+        newImage = QtGui.QImage(128, 128, QtGui.QImage.Format_RGB32)
+        newImage.fill(QtGui.qRgb(255,255,255))
+
+        for y in range(100,127):
+            for x in range(1,127):
+                c = image.pixel(x,y)
+                red = QColor(c).getRgbF()[0]
+                if red > 0:
+                    newX, newY = self.reverseMap(x, y)
+#                    print newX, newY
+                    newImage.setPixel(int(newX),int(newY), QtGui.qRgb(0,0,0))
+                x += 1
+            y += 1
+            x = 0
+            self.rectifiedImage.reset(newImage)
+    def reverseMap(self, x, y):
+        H = 10
+        f = 55        
+        d = math.fabs((H*f)/-1)+1
+        newX = H * x * (f/-y) + d
+        newY = H * y * (f/-y) + d
+        return round(newX), round(newY)
+
 def main():
     app = QtGui.QApplication(sys.argv)
     form = Window()
@@ -169,22 +256,34 @@ if __name__ == '__main__':
 
 
 
+
+#####HOMOGRAPHY MATRIX
+#homographyMatrix = [[ -8.42014397e-01  -9.13836156e-01   1.10386987e+02] [  1.22808744e-02  -3.46093934e+00   3.46141924e+02] [ -5.21625321e-05  -1.55665641e-02   1.00000000e+00]]
+#homographyMatrix = np.matrix('-8.42014397e-01  -9.13836156e-01   1.10386987e+02;1.22808744e-02  -3.46093934e+00   3.46141924e+02;-5.21625321e-05  -1.55665641e-02   1.00000000e+00')
+
 ### PLAYGROUND
 
 ###HOUGH
 
-#imgpath = 'C:/Users/sayegh/test.jpg'
+#imgpath = 'C:/Users/sayegh/warpView.jpg'
 #img = cv2.imread(imgpath)
+#
 #gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-##edges = cv2.Canny(gray,50,100,apertureSize = 3)
-#minLineLength = 5
-#maxLineGap = 20
-#lines = cv2.HoughLinesP(gray,0.1,np.pi/180,20,minLineLength,maxLineGap)
-##for line in lines:
-##    for x1,y1,x2,y2 in line:
-##        cv2.line(img,(x1,y1),(x2,y2),(0,255,0),1)
-##        print x1,  y1, x2, y2
-##cv2.imwrite('res.jpg',img)
+#edges = cv2.Canny(gray,50,150,apertureSize = 3)
+#print img.shape[1]
+#print img.shape
+#minLineLength=img.shape[1]-300
+#lines = cv2.HoughLinesP(image=edges,rho=0.02,theta=np.pi/500, threshold=10,lines=np.array([]), minLineLength=minLineLength,maxLineGap=100)
+#print lines
+#a,b,c = lines.shape
+#for i in range(a):
+#    cv2.line(img, (lines[i][0][0], lines[i][0][1]), (lines[i][0][2], lines[i][0][3]), (0, 0, 255), 3, cv2.LINE_AA)
+#
+#
+#cv2.imshow('result', img)
+#
+#cv2.waitKey(0)
+#cv2.destroyAllWindows()
 
 
 
