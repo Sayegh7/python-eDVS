@@ -43,8 +43,11 @@ class computationThread(QThread):
 
             self.painter.begin(self.image)
             self.painter2.begin(self.image2)
+            pen = QPen()
+            pen.setWidth(1)
+            pen.setColor(QColor(qRgb(254,0,0)))
             self.painter.setPen(QColor(qRgb(0,255,0)))
-            self.painter2.setPen(QColor(qRgb(254,0,0)))
+            self.painter2.setPen(pen)
 
             array = self.QImageToCvMat(self.image)
             
@@ -127,10 +130,12 @@ class computationThread(QThread):
                         totalY += y
                         countX += 1
                         countY += 1
-            COGx = totalX / countX
-            COGy = totalY / countY
-            self.painter2.setPen(QColor(qRgb(0,0,255)))
-            self.painter2.drawLine(COGx,COGy,63,63)
+            
+            if countX > 0:
+                COGx = totalX / countX
+                COGy = totalY / countY
+                self.painter2.setPen(QColor(qRgb(0,0,255)))
+                self.painter2.drawLine(COGx,COGy,63,63)
 
             self.painter.end()
             self.painter2.end()
@@ -171,7 +176,7 @@ class computationThread(QThread):
         edges = cv2.Canny(gray,50,100,apertureSize = 3)
         minLineLength = 50
         maxLineGap = 2
-        lines = cv2.HoughLinesP(edges,1,np.pi/90,10,minLineLength,maxLineGap)
+        lines = cv2.HoughLinesP(edges,1,np.pi/90,20,minLineLength,maxLineGap)
         return lines        
 
         
