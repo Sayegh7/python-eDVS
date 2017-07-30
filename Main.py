@@ -26,6 +26,7 @@ class computationThread(QThread):
         while ser.is_open:
             line = ser.read(4096)
             self.image.fill(QtGui.qRgb(255,255,255))
+            self.image2.fill(QtGui.qRgb(255,255,255))
             for i,k in zip(line[0::2], line[1::2]):
                 byteOne = struct.unpack('B', i)[0]
                 byteTwo = struct.unpack('B', k)[0]
@@ -41,8 +42,9 @@ class computationThread(QThread):
                 self.image.setPixel(x,y, QtGui.qRgb(0,0,0))
 
             self.painter.begin(self.image)
+            self.painter2.begin(self.image2)
             self.painter.setPen(QColor(qRgb(0,255,0)))
-
+            self.painter2.setPen(QColor(qRgb(254,0,0)))
 
             array = self.QImageToCvMat(self.image)
             
@@ -110,9 +112,29 @@ class computationThread(QThread):
                 for x1,y1,x2,y2 in line:
                     self.painter.setPen(QColor(qRgb(255,0,0)))
                     self.painter.drawLine(x1,y1,x2,y2)
+                    self.painter2.drawLine(x1,y1,x2,y2)
+                
+            array2 = self.QImageToCvMat(self.image2)
+#            [x][y][2] is the red component
+            totalX = 0
+            totalY = 0
+            countX = 0
+            countY = 0
+            for y in range(0,127):
+                for x in range(0,127):
+                    if array2[x][y][2] == 254:
+                        totalX += x
+                        totalY += y
+                        countX += 1
+                        countY += 1
+            COGx = totalX / countX
+            COGy = totalY / countY
+            self.painter2.setPen(QColor(qRgb(0,0,255)))
+            self.painter2.drawLine(COGx,COGy,63,63)
 
             self.painter.end()
-            self.emit(SIGNAL('reset'), self.image)
+            self.painter2.end()
+            self.emit(SIGNAL('reset'), self.image2)
 
 
     def QImageToCvMat(self, incomingImage):
@@ -132,20 +154,20 @@ class computationThread(QThread):
         '''  Applies contours and hough transform to detect lines '''
         homographyMatrix = np.matrix('-8.42014397e-01  -9.13836156e-01   1.10386987e+02;1.22808744e-02  -3.46093934e+00   3.46141924e+02;-5.21625321e-05  -1.55665641e-02   1.00000000e+00')
         im = cv2.warpPerspective(img, homographyMatrix, (128,128))
-        rows,cols = im.shape[:2]
-        imgray = cv2.cvtColor(im,cv2.COLOR_BGR2GRAY)
-        ret,thresh = cv2.threshold(imgray,125,255,0)
-        thresh = (255-thresh)
-        im2, contours, hierarchy = cv2.findContours(thresh,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
-        contnumber=0
-        image = np.zeros((128, 128, 3), np.uint8)
-        image[:] = (255, 255, 255)
-        for contour in contours:
-            if(len(contour) >= 10):
-                cv2.drawContours(image, contours, contnumber, (0,0,255), 2) #draw only contour contnumber
-            contnumber+=1
+#        rows,cols = im.shape[:2]
+#        imgray = cv2.cvtColor(im,cv2.COLOR_BGR2GRAY)
+#        ret,thresh = cv2.threshold(imgray,125,255,0)
+#        thresh = (255-thresh)
+#        im2, contours, hierarchy = cv2.findContours(thresh,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
+#        contnumber=0
+#        image = np.zeros((128, 128, 3), np.uint8)
+#        image[:] = (255, 255, 255)
+#        for contour in contours:
+#            if(len(contour) >= 10):
+#                cv2.drawContours(image, contours, contnumber, (0,0,255), 1) #draw only contour contnumber
+#            contnumber+=1
                 
-        gray = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
+        gray = cv2.cvtColor(im,cv2.COLOR_BGR2GRAY)
         edges = cv2.Canny(gray,50,100,apertureSize = 3)
         minLineLength = 50
         maxLineGap = 2
