@@ -10,6 +10,7 @@ import imutils
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import math
+from threading import Timer
 
 class computationThread(QThread):
     def __init__(self):
@@ -17,34 +18,48 @@ class computationThread(QThread):
     def __del__(self):
         self.wait()
     def run(self):
-        ser = serial.Serial('COM3', 12000000, timeout=0.1)
-        ser.write('E+\nE+')
+        self.turning = False
+        self.rightVotes = 0
+        self.leftVotes = 0
+        self.leftMotorSpeed = 50
+        self.rightMotorSpeed = 50
+        self.ser = serial.Serial('COM3', 12000000, timeout=0.1)
+        self.ser.write('E+\nE+\n!M+\n!M+')
         self.image = QtGui.QImage(128, 128, QtGui.QImage.Format_RGB32)
         self.image2 = QtGui.QImage(128, 128, QtGui.QImage.Format_RGB32)
         self.painter = QPainter()
         self.painter2 = QPainter()
+#        t = Timer(5.0, self.stop)
+#        t.start()
+#        self.adjustLeft()
+        self.moveForward()
 
-        while ser.is_open:
-            line = ser.read(4096*4)
+        while self.ser.is_open:
+            line = self.ser.read(4096)
             self.image.fill(QtGui.qRgb(255,255,255))
             self.image2.fill(QtGui.qRgb(255,255,255))
-            for i,k in zip(line[0::2], line[1::2]):
-                byteOne = struct.unpack('B', i)[0]
-                byteTwo = struct.unpack('B', k)[0]
-        
+            skipNextByte = False
+            for index, element in enumerate(line):
+#            for i,k in tuples:
+                if skipNextByte == True:
+                    skipNextByte = False
+                    continue
+                
+                byteOne = struct.unpack('B', element)[0]
                 validEvent = (byteOne & 0x80) >> 7;
                 if validEvent == 0:
                     continue
+                
+                skipNextByte = True          
+                if index+1 >= len(line):
+                    break
+                byteTwo = struct.unpack('B', line[index+1])[0]
+                
                 x = byteTwo & 0x7f;
-#                if x > 85:
-#                    continue
-#                x+=42
-
                 y = byteOne & 0x7f;
                 
                 if y < 100:
                     continue
-#                polarity = (byteTwo & 0x80) >> 7;
                 self.image.setPixel(x,y, QtGui.qRgb(254,0,0))
                 self.image2.setPixel(x,y, QtGui.qRgb(254,0,0))
 
@@ -127,43 +142,73 @@ class computationThread(QThread):
 
             array2 = self.QImageToCvMat(self.image2)
             templates = ["left_hand_curve.png", "right_hand_curve.png", "straight_lines.png"]
-            (startX, startY, endX, endY) = self.templateMatch(array2, templates[2])
+            (startX, startY, endX, endY) = self.templateMatch(array2, templates[0])
 #            homographyMatrix = np.matrix('-8.42014397e-01  -9.13836156e-01   1.10386987e+02;1.22808744e-02  -3.46093934e+00   3.46141924e+02;-5.21625321e-05  -1.55665641e-02   1.00000000e+00')
 #            img = cv2.warpPerspective(array2, homographyMatrix, (128,128))
 ##            [x][y][2] is the red component
 #            im = np.require(img, np.uint8, 'C')
-            self.painter.setPen(QColor(qRgb(0,0,255)))
-
+            self.painter2.setPen(QColor(qRgb(0,0,255)))
             self.painter2.drawRect(startX, startY, endX-startX, endY-startY)
-            
+            if startX > 0:
+                self.leftVotes += 1
+                if self.leftVotes >= 3:    
+                    t = Timer(0.75, self.turnLeft90Degrees)
+                    t.start()
+                else:
+                    t = Timer(0.75, self.clearLeftVotes)
+                    t.start()
+
+            (startX, startY, endX, endY) = self.templateMatch(array2, templates[1])
+            if startX > 0:
+                self.rightVotes += 1
+                if self.rightVotes >= 3:
+                    t = Timer(0.75, self.turnRight90Degrees)
+                    t.start()
+                else:
+                    t = Timer(0.75, self.clearRightVotes)
+                    t.start()
+            self.painter2.drawRect(startX, startY, endX-startX, endY-startY)
+#            (startX, startY, endX, endY) = self.templateMatch(array2, templates[2])
+#            if startX > 0:
+#                self.moveForward()
+#
+#            self.painter2.drawRect(startX, startY, endX-startX, endY-startY)
 #            self.painter3 = QPainter()
-#            self.painter3.begin(qImage)
-#            self.painter3.setPen(QColor(qRgb(0,0,255)))
-
-
-#            totalX = 0
-#            totalY = 0
-#            countX = 0
-#            countY = 0
-#            for y in range(0,127):
-#                for x in range(0,127):
-#                    if img[y][x][2] == 254:
-#                        totalX += (x-63)
-#                        totalY += y
-#                        countX += 1
-#                        countY += 1
-#            
-#            if countX > 0:
-#                COGx = totalX / countX
-#                print COGx
-#                COGx += 63
-#                COGy = totalY / countY
-#                self.painter3.drawLine(COGx,63,63,63)
-##
+#            self.painter3.begin(self.image2)
+#
+            
+            totalX = 0
+            totalY = 0
+            countX = 0
+            countY = 0
+            for y in range(100,127):
+                for x in range(0,127):
+                    if array2[y][x][2] == 254:
+                        totalX += (x-63)
+                        totalY += y
+                        countX += 1
+                        countY += 1
+            
+            if countX > 0 and self.turning == False:
+                COGx = totalX / countX
+                if COGx > 0:
+                    self.adjustLeft()
+                if COGx < 0:
+                    self.adjustRight()
+                if COGx == 0:
+                    self.moveForward()
+                COGx += 63
+                self.painter2.setPen(QColor(qRgb(0,0,255)))
+                self.painter2.drawLine(COGx,63,63,63)
+##      
             self.painter.end()
             self.painter2.end()
 #            self.painter3.end()
             self.emit(SIGNAL('reset'), self.image2)
+    def clearLeftVotes(self):
+        self.leftVotes = 0
+    def clearRightVotes(self):
+        self.rightVotes = 0
     def templateMatch(self, image, template):
         curve = cv2.imread(template)
         template = cv2.cvtColor(curve, cv2.COLOR_BGR2GRAY)
@@ -273,7 +318,58 @@ class computationThread(QThread):
         maxLineGap = 2
         lines = cv2.HoughLinesP(edges,1,np.pi/90,20,minLineLength,maxLineGap)
         return lines        
+#    MV0 is left, MV1 is right
 
+    def adjustRight(self):
+        if self.turning == True:
+            return
+
+        self.ser.write('\n!MV0=35\n!!MV0=45\n!MV1=50\n!!MV1=50')
+    def adjustLeft(self):
+        if self.turning == True:
+            return
+        
+        self.ser.write('\n!MV0=50\n!!MV0=50\n!MV1=35\n!!MV1=35')
+    def moveForward(self):
+        print "Move Forward"
+        if self.turning == True:
+            return
+        self.rightMotorSpeed = 50
+        self.leftMotorSpeed = 50
+        self.ser.write('\n!MV0=50\n!!MV0=50\n!MV1=50\n!!MV1=50')
+    def stop(self):
+        self.rightMotorSpeed = 50
+        self.leftMotorSpeed = 50
+        self.ser.write('\n!M-\n!M-')
+    def startBot(self):
+        self.rightMotorSpeed = 50
+        self.leftMotorSpeed = 50
+        self.ser.write('\n!M+\n!M+')
+        self.moveForward()
+    def turnLeft90Degrees(self):
+        if self.turning == True:
+            return
+
+        print "Left turn start"
+        self.leftVotes = 0
+        self.turning = True
+        self.ser.write('\n!MV0=0\n!!MV0=0\n!MV1=50\n!!MV1=50')
+        t = Timer(0.5, self.endTurning)
+        t.start()
+    def turnRight90Degrees(self):
+        if self.turning == True:
+            return
+        print "Right turn start"
+        self.rightVotes = 0
+        self.turning = True        
+        self.ser.write('\n!MV0=50\n!!MV0=50\n!MV1=0\n!!MV1=0')
+        t = Timer(0.5, self.endTurning)
+        t.start()
+
+
+    def endTurning(self):
+        self.turning = False
+        self.moveForward()
         
         
 class rectifiedThread(QThread):
@@ -314,10 +410,14 @@ class rectifiedImage(QtGui.QMainWindow):
 class Window(QtGui.QMainWindow):
     def __init__(self):
         super(Window, self).__init__()
-        self.setGeometry(50,50,128*6,128*6)
+        self.setGeometry(50,50,128*7,128*7)
         self.setWindowTitle("eDVS Line detector")
         self.scale = 5
-#        self.rectifiedImage = rectifiedImage()
+        self.button = QtGui.QPushButton('Stop', self)
+        self.button.setGeometry(128*6,128*6,100,30)
+        self.buttonStart = QtGui.QPushButton('Start', self)
+        self.buttonStart.setGeometry(128*6,128*6+40,100,30)
+
         self.graphics = QtGui.QGraphicsView(self)
         self.graphics.setGeometry(0,0,128*6,128*6)
         self.scene = QtGui.QGraphicsScene()
@@ -333,6 +433,8 @@ class Window(QtGui.QMainWindow):
         self.graphics.setScene(self.scene)
         self.show()
         self.get_thread = computationThread()
+        self.button.clicked.connect(self.get_thread.stop)
+        self.buttonStart.clicked.connect(self.get_thread.startBot)
         self.get_thread.start()
         self.connect(self.get_thread, SIGNAL("reset"), self.reset)
     def reset(self, image):
