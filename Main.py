@@ -29,12 +29,18 @@ class computationThread(QThread):
         self.image2 = QtGui.QImage(128, 128, QtGui.QImage.Format_RGB32)
         self.painter = QPainter()
         self.painter2 = QPainter()
-        self.moveForward()
+        self.stop()
 
         while self.ser.is_open:
-            line = self.ser.read(4096)
+            line = self.ser.read(4096*8)
             self.image.fill(QtGui.qRgb(255,255,255))
             self.image2.fill(QtGui.qRgb(255,255,255))
+            self.painter2.begin(self.image2)
+            pen = QPen()
+            pen.setWidth(2)
+            pen.setColor(QColor(qRgb(254,0,0)))
+            self.painter2.setPen(pen)
+
             skipNextByte = False
             for index, element in enumerate(line):
                 if skipNextByte == True:
@@ -57,27 +63,64 @@ class computationThread(QThread):
                 if y < 100:
                     continue
                 self.image.setPixel(x,y, QtGui.qRgb(254,0,0))
-                self.image2.setPixel(x,y, QtGui.qRgb(254,0,0))
+                self.painter2.drawPoint(x, y)
+#                self.image2.setPixel(x,y, QtGui.qRgb(254,0,0))
 
             self.painter.begin(self.image)
-            self.painter2.begin(self.image2)
-            pen = QPen()
-            pen.setWidth(1)
-            pen.setColor(QColor(qRgb(254,0,0)))
             self.painter.setPen(QColor(qRgb(0,255,0)))
             self.painter.setPen(pen)
-            self.painter2.setPen(pen)
 
-            array = self.QImageToCvMat(self.image)
-            
+#            array = self.QImageToCvMat(self.image)
+#           LANE LINE SIMULATION
+#            self.painter2.drawLine(100,100,120,127)
+#            less angle = left
+#            more angle = right
             array2 = self.QImageToCvMat(self.image2)
+            crop_img = array2[100:27, 63:63] # Crop from x, y, w, h -> 100, 200, 300, 400
+
+            lines = self.detectLines(crop_img)
+            self.painter2.setPen(QColor(qRgb(0,255,255)))
+            if lines is not None:
+                for line in lines:
+#                    radius = line[0][0]
+                    angle = ((math.degrees(line[0][1]))%90)
+                    print radius, angle
+                    if round(angle) < 55:
+                        self.adjustLeft()
+                    if round(angle) > 55:
+                        self.adjustRight()
+#                    if radius < 0:
+#                        angle+=180
+#                        radius = math.fabs(radius)
+#                    px = radius * math.cos(angle)
+#                    py = radius * math.sin(angle)
+#                    print "x", px, "y", py
+#                    self.painter2.translate(px, py)
+#                    self.painter2.rotate(90)
+#                    self.painter2.drawLine(0,0,px,py)
+#                    self.painter2.rotate(-90)                    
+#                    self.painter2.translate(-px, -py)
+
+                        
+            else:
+                print None
+#                    print line[0], math.degrees(line[1])
+#                    for x1,y1,x2,y2 in line:
+#                        slope = (y2-y1)/float(x2-x1)
+#                        angle = math.degrees(math.atan(slope))
+#
+#                        if angle > 45 or angle < -45 or angle == 0:
+#                            continue
+#                        print slope, angle
+#                        self.painter2.drawLine(x1,y1,x2,y2)
+
+
             templates = ["left_hand_curve.png", "right_hand_curve.png", "straight_lines.png"]
             (startX, startY, endX, endY) = self.templateMatch(array2, templates[0])
 #            homographyMatrix = np.matrix('-8.42014397e-01  -9.13836156e-01   1.10386987e+02;1.22808744e-02  -3.46093934e+00   3.46141924e+02;-5.21625321e-05  -1.55665641e-02   1.00000000e+00')
 #            img = cv2.warpPerspective(array2, homographyMatrix, (128,128))
 ##            [x][y][2] is the red component
 #            im = np.require(img, np.uint8, 'C')
-            self.painter2.setPen(QColor(qRgb(0,0,255)))
             self.painter2.drawRect(startX, startY, endX-startX, endY-startY)
             if startX > 0:
                 self.leftVotes += 1
@@ -96,33 +139,33 @@ class computationThread(QThread):
                     t.start()
                 else:
                     t = Timer(0.75, self.clearRightVotes)
-                    t.start()
+                    t.start() 
             self.painter2.drawRect(startX, startY, endX-startX, endY-startY)
 #
             
-            totalX = 0
-            totalY = 0
-            countX = 0
-            countY = 0
-            for y in range(100,127):
-                for x in range(0,127):
-                    if array2[y][x][2] == 254:
-                        totalX += (x-63)
-                        totalY += y
-                        countX += 1
-                        countY += 1
-            
-            if countX > 0 and self.turning == False:
-                COGx = totalX / countX
-                if COGx > 0:
-                    self.adjustLeft()
-                if COGx < 0:
-                    self.adjustRight()
-                if COGx == 0:
-                    self.moveForward()
-                COGx += 63
-                self.painter2.setPen(QColor(qRgb(0,0,255)))
-                self.painter2.drawLine(COGx,63,63,63)
+#            totalX = 0
+#            totalY = 0
+#            countX = 0
+#            countY = 0
+#            for y in range(100,127):
+#                for x in range(0,127):
+#                    if array2[y][x][2] == 254:
+#                        totalX += (x-63)
+#                        totalY += y
+#                        countX += 1
+#                        countY += 1
+#            
+#            if countX > 0 and self.turning == False:
+#                COGx = totalX / countX
+##                if COGx > 0:
+##                    self.adjustLeft()
+##                if COGx < 0:
+##                    self.adjustRight()
+##                if COGx == 0:
+##                    self.moveForward()
+#                COGx += 63
+#                self.painter2.setPen(QColor(qRgb(0,0,255)))
+#                self.painter2.drawLine(COGx,63,63,63)
             self.painter.end()
             self.painter2.end()
             self.emit(SIGNAL('reset'), self.image2)
@@ -214,50 +257,52 @@ class computationThread(QThread):
         raise NotImplementedException
 
         
-    def detectLines(self, img):
+    def detectLines(self, im):
         '''  Applies contours and hough transform to detect lines '''
-        homographyMatrix = np.matrix('-8.42014397e-01  -9.13836156e-01   1.10386987e+02;1.22808744e-02  -3.46093934e+00   3.46141924e+02;-5.21625321e-05  -1.55665641e-02   1.00000000e+00')
-        im = cv2.warpPerspective(img, homographyMatrix, (128,128))
-        rows,cols = im.shape[:2]
-        imgray = cv2.cvtColor(im,cv2.COLOR_BGR2GRAY)
-        ret,thresh = cv2.threshold(imgray,125,255,0)
-        thresh = (255-thresh)
-        im2, contours, hierarchy = cv2.findContours(thresh,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
-        contnumber=0
-        image = np.zeros((128, 128, 3), np.uint8)
-        image[:] = (255, 255, 255)
-        for contour in contours:
-            if(len(contour) >= 10):
-                cv2.drawContours(image, contours, contnumber, (0,0,255), 1) #draw only contour contnumber
-            contnumber+=1
-        kernel = np.ones((5,5),np.float32)/25
-        dst = cv2.filter2D(image,-1,kernel)
-
-        gray = cv2.cvtColor(dst ,cv2.COLOR_BGR2GRAY)
+#        homographyMatrix = np.matrix('-8.42014397e-01  -9.13836156e-01   1.10386987e+02;1.22808744e-02  -3.46093934e+00   3.46141924e+02;-5.21625321e-05  -1.55665641e-02   1.00000000e+00')
+#        im = cv2.warpPerspective(img, homographyMatrix, (128,128))
+#        rows,cols = im.shape[:2]
+#        imgray = cv2.cvtColor(im,cv2.COLOR_BGR2GRAY)
+#        ret,thresh = cv2.threshold(imgray,125,255,0)
+#        thresh = (255-thresh)
+#        im2, contours, hierarchy = cv2.findContours(thresh,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
+#        contnumber=0
+#        image = np.zeros((128, 128, 3), np.uint8)
+#        image[:] = (255, 255, 255)
+#        for contour in contours:
+#            if(len(contour) >= 10):
+#                cv2.drawContours(image, contours, contnumber, (0,0,255), 4) #draw only contour contnumber
+#            contnumber+=1
+#        kernel = np.ones((5,5),np.float32)/25
+#        dst = cv2.filter2D(image,-1,kernel)
+##
+        gray = cv2.cvtColor(im ,cv2.COLOR_BGR2GRAY)
         edges = cv2.Canny(gray,50,100,apertureSize = 3)
-        minLineLength = 50
+#        print angles        
+        minLineLength = 10
         maxLineGap = 2
-        lines = cv2.HoughLinesP(edges,1,np.pi/90,20,minLineLength,maxLineGap)
+        lines = cv2.HoughLines(edges,1,np.pi/90,20,np.array([]), minLineLength,maxLineGap)
         return lines        
+#        return angles        
 #    MV0 is left, MV1 is right
 
     def adjustRight(self):
         if self.turning == True:
             return
-
-        self.ser.write('\n!MV0=35\n!!MV0=45\n!MV1=50\n!!MV1=50')
+        print "Adjusting right"
+        self.ser.write('\n!MV0=25\n!!MV0=25\n!MV1=30\n!!MV1=30')
     def adjustLeft(self):
         if self.turning == True:
             return
-        
-        self.ser.write('\n!MV0=50\n!!MV0=50\n!MV1=35\n!!MV1=35')
+        print "Adjusting left"        
+        self.ser.write('\n!MV0=30\n!!MV0=30\n!MV1=25\n!!MV1=25')
     def moveForward(self):
         print "Move Forward"
         if self.turning == True:
             return
         self.rightMotorSpeed = 50
         self.leftMotorSpeed = 50
-        self.ser.write('\n!MV0=50\n!!MV0=50\n!MV1=50\n!!MV1=50')
+        self.ser.write('\n!MV0=30\n!!MV0=20\n!MV1=30\n!!MV1=30')
     def stop(self):
         self.rightMotorSpeed = 50
         self.leftMotorSpeed = 50
@@ -268,6 +313,7 @@ class computationThread(QThread):
         self.ser.write('\n!M+\n!M+')
         self.moveForward()
     def turnLeft90Degrees(self):
+        return
         if self.turning == True:
             return
 
@@ -278,6 +324,7 @@ class computationThread(QThread):
         t = Timer(0.5, self.endTurning)
         t.start()
     def turnRight90Degrees(self):
+        return
         if self.turning == True:
             return
         print "Right turn start"
