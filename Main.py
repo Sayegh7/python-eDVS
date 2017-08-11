@@ -29,9 +29,6 @@ class computationThread(QThread):
         self.image2 = QtGui.QImage(128, 128, QtGui.QImage.Format_RGB32)
         self.painter = QPainter()
         self.painter2 = QPainter()
-#        t = Timer(5.0, self.stop)
-#        t.start()
-#        self.adjustLeft()
         self.moveForward()
 
         while self.ser.is_open:
@@ -40,7 +37,6 @@ class computationThread(QThread):
             self.image2.fill(QtGui.qRgb(255,255,255))
             skipNextByte = False
             for index, element in enumerate(line):
-#            for i,k in tuples:
                 if skipNextByte == True:
                     skipNextByte = False
                     continue
@@ -74,72 +70,6 @@ class computationThread(QThread):
 
             array = self.QImageToCvMat(self.image)
             
-#            lines = self.detectLines(array)
-#            if np.any(lines) == None:
-#                self.painter.end()
-#                self.emit(SIGNAL('reset'), self.image2)
-#                continue
-            
-#            left_lane = []
-#            right_lane = []
-#            for line in lines:
-#                for x1,y1,x2,y2 in line:
-#                    if y1 > 96 and y2 > 96:
-#                        if x1 <= 64 or x2 <= 64:
-#                            self.painter.setPen(QColor(qRgb(255,255,0)))
-#                            self.painter2.setPen(QColor(qRgb(255,255,0)))
-#                            point = []
-#                            point.append(x1)
-#                            point.append(y1)
-#                            left_lane.append(point)
-#                            point = []
-#                            point.append(x2)
-#                            point.append(y2)                            
-#                            left_lane.append(point)
-#                        else:
-#                            pen = QPen()
-#                            pen.setWidth(4)
-#                            pen.setColor(QColor(qRgb(255,0,0)))
-#                            self.painter.setPen(pen)
-#                            self.painter2.setPen(pen)
-#                            point = []
-#                            point.append(x1)
-#                            point.append(y1)
-#                            right_lane.append(point)
-#                            point = []
-#                            point.append(x2)
-#                            point.append(y2)                            
-#                            right_lane.append(point)
-#                    else:
-#                        self.painter.setPen(QColor(qRgb(0,255,0)))
-#                        self.painter2.setPen(QColor(qRgb(0,255,0)))
-#                    self.painter.drawLine(x1,y1,x2,y2)
-#                    self.painter2.drawLine(x1,y1,x2,y2)
-#                    
-#
-#            left = np.array(left_lane)
-#            if len(left) != 0:
-#                [vx,vy,x,y] = cv2.fitLine(left,cv2.DIST_L2,0,0.01,0.01)
-#                lefty = int((-x*vy/vx) + y)
-#                righty = int(((128-x)*vy/vx)+y)
-#                self.painter.setPen(QColor(qRgb(0,0,255)))
-#                self.painter.drawLine(127,righty,0,lefty)
-#                
-#            right= np.array(right_lane)
-#            
-#            if len(right) != 0:
-#                [vx,vy,x,y] = cv2.fitLine(right,cv2.DIST_L2,0,0.01,0.01)
-#                lefty = int((-x*vy/vx) + y)
-#                righty = int(((128-x)*vy/vx)+y)
-#                self.painter.setPen(QColor(qRgb(0,0,255)))
-#                self.painter.drawLine(127,righty,0,lefty)
-
-#            for line in lines:
-#                for x1,y1,x2,y2 in line:
-#                    self.painter.setPen(QColor(qRgb(255,0,0)))
-#                    self.painter.drawLine(x1,y1,x2,y2)
-#                    self.painter2.drawLine(x1,y1,x2,y2)
-
             array2 = self.QImageToCvMat(self.image2)
             templates = ["left_hand_curve.png", "right_hand_curve.png", "straight_lines.png"]
             (startX, startY, endX, endY) = self.templateMatch(array2, templates[0])
@@ -168,13 +98,6 @@ class computationThread(QThread):
                     t = Timer(0.75, self.clearRightVotes)
                     t.start()
             self.painter2.drawRect(startX, startY, endX-startX, endY-startY)
-#            (startX, startY, endX, endY) = self.templateMatch(array2, templates[2])
-#            if startX > 0:
-#                self.moveForward()
-#
-#            self.painter2.drawRect(startX, startY, endX-startX, endY-startY)
-#            self.painter3 = QPainter()
-#            self.painter3.begin(self.image2)
 #
             
             totalX = 0
@@ -200,10 +123,8 @@ class computationThread(QThread):
                 COGx += 63
                 self.painter2.setPen(QColor(qRgb(0,0,255)))
                 self.painter2.drawLine(COGx,63,63,63)
-##      
             self.painter.end()
             self.painter2.end()
-#            self.painter3.end()
             self.emit(SIGNAL('reset'), self.image2)
     def clearLeftVotes(self):
         self.leftVotes = 0
@@ -372,39 +293,6 @@ class computationThread(QThread):
         self.moveForward()
         
         
-class rectifiedThread(QThread):
-    def __init__(self):
-        QThread.__init__(self)
-    def __del__(self):
-        self.wait()
-    def run(self):
-        self.rectifiedImage = rectifiedImage()
-
-class rectifiedImage(QtGui.QMainWindow):
-    def __init__(self):
-        super(rectifiedImage, self).__init__()
-        self.setGeometry(50,50,128*6,128*6)
-        self.setWindowTitle("Rectified Image")
-        scale = 5
-        self.graphics = QtGui.QGraphicsView(self)
-        self.graphics.setGeometry(0,0,128*6,128*6)
-        self.scene = QtGui.QGraphicsScene()
-        self.image = QtGui.QImage(128, 128, QtGui.QImage.Format_RGB32)
-        self.image.fill(QtGui.qRgb(255,255,255))
-        self.pixmap = QtGui.QGraphicsPixmapItem()
-        self.image.fill(QtGui.qRgb(127,127,127))
-        tempPixmap = QtGui.QPixmap(1,1)
-        tempPixmap.convertFromImage(self.image)
-        tempPixmap = tempPixmap.scaled(128*scale,128*scale)
-        self.pixmap.setPixmap(tempPixmap)
-        self.scene.addItem(self.pixmap)    
-        self.graphics.setScene(self.scene)
-        self.show()
-    def reset(self, image):
-        tempPixmap = QtGui.QPixmap(1,1)
-        tempPixmap.convertFromImage(image)
-        tempPixmap = tempPixmap.scaled(128*5,128*5)
-        self.pixmap.setPixmap(tempPixmap)
 
 
 class Window(QtGui.QMainWindow):
@@ -442,32 +330,6 @@ class Window(QtGui.QMainWindow):
         tempPixmap.convertFromImage(image)
         tempPixmap = tempPixmap.scaled(128*self.scale,128*self.scale)
         self.pixmap.setPixmap(tempPixmap)
-#        self.rectify(image)
-    def rectify(self, image):
-        x = 0;
-        y = 100;
-        newImage = QtGui.QImage(128, 128, QtGui.QImage.Format_RGB32)
-        newImage.fill(QtGui.qRgb(255,255,255))
-
-        for y in range(100,127):
-            for x in range(1,127):
-                c = image.pixel(x,y)
-                red = QColor(c).getRgbF()[0]
-                if red > 0:
-                    newX, newY = self.reverseMap(x, y)
-#                    print newX, newY
-                    newImage.setPixel(int(newX),int(newY), QtGui.qRgb(0,0,0))
-                x += 1
-            y += 1
-            x = 0
-            self.rectifiedImage.reset(newImage)
-    def reverseMap(self, x, y):
-        H = 10
-        f = 55        
-        d = math.fabs((H*f)/-1)+1
-        newX = H * x * (f/-y) + d
-        newY = H * y * (f/-y) + d
-        return round(newX), round(newY)
 
 def main():
     app = QtGui.QApplication(sys.argv)
