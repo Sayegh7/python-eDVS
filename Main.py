@@ -80,12 +80,10 @@ class computationThread(QThread):
         self.frameNumber += 1
     def refreshDisplay(self):
         '''  Is called 30 times per second, refreshes the bot display screen'''
-
         threading.Timer(1.0/30, self.refreshDisplay).start()
         self.image.fill(QtGui.qRgb(255,255,255))
         for x,y in list(self.q):
-            self.image.setPixel(x,y, QtGui.qRgb(254,0,0))
-        
+            self.image.setPixel(x,y, QtGui.qRgb(254,0,0))        
         self.emit(SIGNAL('reset'), self.image)
 
     def removeFromCentroidBuffer(self, x):
@@ -99,10 +97,10 @@ class computationThread(QThread):
         self.countX += 1
         if self.countX > 0 and self.turning == False:
             self.COGx = self.totalX / self.countX
-#            if self.COGx > 0:
-#                self.adjustLeft()
-#            if self.COGx < 0:
-#                self.adjustRight()
+            if self.COGx > 0:
+                self.adjustLeft()
+            if self.COGx < 0:
+                self.adjustRight()
             self.COGx += 63
         self.drawCentroid()
 
@@ -115,40 +113,32 @@ class computationThread(QThread):
         if startX > 0:
             self.leftVotes += 1
             if self.leftVotes >= 2:    
-                t = threading.Timer(1.5, self.turnLeft90Degrees)
-                t.start()
+                threading.Timer(1.5, self.turnLeft90Degrees).start()
             else:
-                t = threading.Timer(1.5, self.clearLeftVotes)
-                t.start()
+                threading.Timer(1.5, self.clearLeftVotes).start()
 
         (startX, startY, endX, endY) = self.templateMatch(array, templates[1])
+        self.painter.drawRect(startX, startY, endX-startX, endY-startY)
+
         if startX > 0:
             self.rightVotes += 1
             if self.rightVotes >= 2:
-                t = threading.Timer(1.5, self.turnRight90Degrees)
-                t.start()
+                t = threading.Timer(1.5, self.turnRight90Degrees).start()
             else:
-                t = threading.Timer(1.5, self.clearRightVotes)
-                t.start() 
-        self.painter.drawRect(startX, startY, endX-startX, endY-startY)
-        self.emit(SIGNAL('reset'), self.image)
+                t = threading.Timer(1.5, self.clearRightVotes).start()
         
     def runAlgorithms(self):
-        threading.Timer(0.1, self.runAlgorithms).start()
-#           array = self.QImageToCvMat(self.image)
+        threading.Timer(1.0/30, self.runAlgorithms).start()
 #           LANE LINE SIMULATION
 #            self.painter.drawLine(100,100,120,127)
-#            less angle = left
-#            more angle = right
         self.drawCentroid()
         array = self.QImageToCvMat(self.image)
-        # Crop from x, y, w, h -> 100, 200, 300, 400
         crop_img = array[100:127, 63:127]
         if self.record == True:
             self.saveFrame(array)
             
             
-#        self.detectTurnsWithTemplateMatching(crop_img)
+        self.detectTurnsWithTemplateMatching(array)
         
 #        self.detectLines(crop_img)
 
