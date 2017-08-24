@@ -153,7 +153,6 @@ def hough_lines_draw(img, indicies, rhos, thetas):
 
 # run hough_lines_accumulator on the shapes canny_edges image
 H, rhos, thetas = hough_lines_acc(canny_edges)
-print H
 indicies, H = hough_peaks(H, 3, nhood_size=11) # find peaks
 plot_hough_acc(H) # plot hough space, brighter spots have higher votes
 hough_lines_draw(shapes, indicies, rhos, thetas)

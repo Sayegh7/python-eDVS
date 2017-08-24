@@ -44,7 +44,6 @@ class computationThread(QThread):
         self.painter.setPen(pen)
         self.refreshDisplay()
         self.runAlgorithms()
-
         while self.ser.is_open:
             
             validEvent = 0
@@ -64,15 +63,20 @@ class computationThread(QThread):
                 
             if y < 100:
                 continue
-                
+            if x < 10 or x > 100:
+                continue
             self.q.append((x, y))
-            self.centroids(x)
 
-            if(len(self.q) > 400):
+#            self.centroids(x)
+
+            if(len(self.q) > 200):
                 (oldx, _) = self.q.popleft()
-                self.removeFromCentroidBuffer(oldx)
+#                self.removeFromCentroidBuffer(oldx)
 
-
+    def removeEventFromQueue(self):
+        if(len(self.q) > 0):
+            (oldx, _) = self.q.popleft()
+        
     def saveFrame(self, image):
         '''  Saves the image on disk '''
 
@@ -98,16 +102,16 @@ class computationThread(QThread):
         if self.countX > 0 and self.turning == False:
             self.COGx = self.totalX / self.countX
             if self.COGx > 0:
-                self.adjustLeft()
-            if self.COGx < 0:
                 self.adjustRight()
+            if self.COGx < 0:
+                self.adjustLeft()
             self.COGx += 63
         self.drawCentroid()
 
     def drawCentroid(self):
         self.painter.drawLine(63,63,self.COGx,63)
     def detectTurnsWithTemplateMatching(self, array):
-        templates = ["left_hand_curve.png", "right_hand_curve.png", "straight_lines.png"]
+        templates = ["left_hand_curve.png", "right_hand_curve.png"]
         (startX, startY, endX, endY) = self.templateMatch(array, templates[0])
         self.painter.drawRect(startX, startY, endX-startX, endY-startY)
         if startX > 0:
@@ -128,20 +132,19 @@ class computationThread(QThread):
                 t = threading.Timer(1.5, self.clearRightVotes).start()
         
     def runAlgorithms(self):
-        threading.Timer(1.0/30, self.runAlgorithms).start()
-#           LANE LINE SIMULATION
-#            self.painter.drawLine(100,100,120,127)
-        self.drawCentroid()
+        threading.Timer(1.0/10, self.runAlgorithms).start()
+#       LANE LINE SIMULATION
+#       self.painter.drawLine(100,100,120,127)
+#        self.drawCentroid()
         array = self.QImageToCvMat(self.image)
         crop_img = array[100:127, 63:127]
         if self.record == True:
             self.saveFrame(array)
             
+#        if(self.turning == False):    
+#            self.detectTurnsWithTemplateMatching(array)
             
-        self.detectTurnsWithTemplateMatching(array)
-        
-#        self.detectLines(crop_img)
-
+        self.detectLines(array)
 
         self.emit(SIGNAL('reset'), self.image)
     def clearLeftVotes(self):
@@ -250,15 +253,61 @@ class computationThread(QThread):
 #            contnumber+=1
 #        kernel = np.ones((5,5),np.float32)/25
 #        dst = cv2.filter2D(image,-1,kernel)
-##
-        gray = cv2.cvtColor(im ,cv2.COLOR_BGR2GRAY)
-        edges = cv2.Canny(gray,50,100,apertureSize = 3)
-#        print angles        
+        shapes_grayscale = cv2.cvtColor(im, cv2.COLOR_RGB2GRAY)
+
+        # blur image (this will help clean up noise for Canny Edge Detection)
+        shapes_blurred = cv2.GaussianBlur(shapes_grayscale, (5, 5), 1.5)
+
+#       find Canny Edges and show resulting image
+        canny_edges = cv2.Canny(shapes_blurred, 100, 200)
         minLineLength = 10
         maxLineGap = 2
-        lines = cv2.HoughLinesP(edges,1,np.pi/90,20,np.array([]), minLineLength,maxLineGap)
-        self.drawLines(lines)
+        lines = cv2.HoughLines(canny_edges,1,np.pi/90,15,np.array([]), minLineLength,maxLineGap)
+        self.drawLinesFromThetas(lines)
 
+    def drawLinesFromThetas(self, lines):
+        if lines is not None:
+            x = 8
+            for line in (lines):
+                x-=1
+                if x < 0:
+                    return
+                rho = line[0][0]
+                theta = line[0][1]
+                a = np.cos(theta)
+                b = np.sin(theta)
+                x0 = a*rho
+                y0 = b*rho
+                # these are then scaled so that the lines go off the edges of the image
+                x1 = int(x0 + 1000*(-b))
+                y1 = int(y0 + 1000*(a))
+                x2 = int(x0 - 1000*(-b))
+                y2 = int(y0 - 1000*(a))
+                slope = float(y2-y1)/float(x2-x1)
+                # y = mx+b
+                b = y2-(slope*x2)
+                x = (128-b)/slope
+                self.steer(int(x), np.rad2deg(theta))
+                self.painter.drawLine(x1, y1, x2, y2);
+    def steer(self, intersection, angle):
+        print "line meets at", intersection
+        print "theta", angle
+        if angle > 90:
+#            right lane
+            if intersection < 85:
+                self.adjustLeft()
+            elif intersection > 100:
+                if intersection < 135:                        
+                    self.adjustRight()
+                
+        elif angle < 90:
+#            left lane                    
+            if intersection > 0 and intersection < 20:
+                self.adjustRight()
+            elif intersection > 20:
+                self.adjustLeft()
+        else:
+            print "COOORNEEEER"
     def drawLines(self,lines):
         if lines is not None:
             a,b,c = lines.shape
@@ -267,38 +316,26 @@ class computationThread(QThread):
 
         
 #    MV0 is left, MV1 is right
-    def adjustRight(self):
-        if self.turning == True:
-            return
-#        print "Adjusting right"
-        self.ser.write('\n!MV0=25\n!!MV0=25\n!MV1=30\n!!MV1=30')
     def adjustLeft(self):
         if self.turning == True:
             return
-#        print "Adjusting left"        
-        self.ser.write('\n!MV0=30\n!!MV0=30\n!MV1=25\n!!MV1=25')
-    def moveForward(self):
-        print "Move Forward"
+        self.ser.write('\n!MV0=10\n!!MV0=10\n!MV1=20\n!!MV1=20')
+    def adjustRight(self):
         if self.turning == True:
             return
-        self.rightMotorSpeed = 50
-        self.leftMotorSpeed = 50
-        self.ser.write('\n!MV0=30\n!!MV0=30\n!MV1=30\n!!MV1=30')
+        self.ser.write('\n!MV0=20\n!!MV0=20\n!MV1=10\n!!MV1=10')
+    def moveForward(self):
+        if self.turning == True:
+            return
+        self.ser.write('\n!MV0=20\n!!MV0=20\n!MV1=20\n!!MV1=20')
     def stop(self):
-        self.rightMotorSpeed = 50
-        self.leftMotorSpeed = 50
         self.record = False
         self.ser.write('\n!M-\n!M-')
     def startBot(self):
         self.record = True
-        self.rightMotorSpeed = 50
-        self.leftMotorSpeed = 50
         self.ser.write('\n!M+\n!M+')
         self.moveForward()
     def turnLeft90Degrees(self):
-        if self.turning == True:
-            return
-
         print "Left turn start"
         self.leftVotes = 0
         self.turning = True
@@ -306,9 +343,6 @@ class computationThread(QThread):
         t = threading.Timer(0.5, self.endTurning)
         t.start()
     def turnRight90Degrees(self):
-        if self.turning == True:
-            return
-        print "Right turn start"
         self.rightVotes = 0
         self.turning = True        
         self.ser.write('\n!MV0=70\n!!MV0=70\n!MV1=0\n!!MV1=0')
