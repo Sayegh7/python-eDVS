@@ -29,6 +29,7 @@ class computationThread(QThread):
         self.ser = serial.Serial('COM3', 12000000, timeout=0.1)
         self.ser.write('E+\nE+\n!M+\n!M+')
         self.image = QtGui.QImage(128, 128, QtGui.QImage.Format_RGB32)
+        self.image2 = QtGui.QImage(128, 128, QtGui.QImage.Format_RGB32)
         self.painter = QPainter()
         self.stop()
         self.q = deque([])
@@ -39,9 +40,8 @@ class computationThread(QThread):
         self.COGx = 0
         pen = QPen()
         pen.setWidth(2)
-        self.qimg = QtGui.QImage(128, 128, QtGui.QImage.Format_RGB32)
         pen.setColor(QColor(qRgb(0,255,0)))
-        self.painter.begin(self.qimg)
+        self.painter.begin(self.image)
         self.painter.setPen(pen)
         self.refreshDisplay()
         self.runAlgorithms()
@@ -66,11 +66,11 @@ class computationThread(QThread):
                 continue
             self.q.append((x, y))
 
-#            self.centroids(x)
+            self.centroids(x)
 
             if(len(self.q) > 200):
                 (oldx, _) = self.q.popleft()
-#                self.removeFromCentroidBuffer(oldx)
+                self.removeFromCentroidBuffer(oldx)
 
     def removeEventFromQueue(self):
         if(len(self.q) > 0):
@@ -86,17 +86,8 @@ class computationThread(QThread):
         threading.Timer(1.0/30, self.refreshDisplay).start()
         self.image.fill(QtGui.qRgb(255,255,255))
         for x,y in list(self.q):
-            self.image.setPixel(x,y, QtGui.qRgb(254,0,0))
-            
-        array = self.QImageToCvMat(self.image)
-        homographyMatrix = np.matrix('-8.42014397e-01  -9.13836156e-01   1.10386987e+02;1.22808744e-02  -3.46093934e+00   3.46141924e+02;-5.21625321e-05  -1.55665641e-02   1.00000000e+00')
-        im = cv2.warpPerspective(array, homographyMatrix, (128,128))
-        self.qimg = self.toQImage(im)
-        if self.record == True:
-            array = self.QImageToCvMat(self.qimg)
-            self.saveFrame(array)
-
-        self.emit(SIGNAL('reset'), self.qimg)
+            self.image.setPixel(x,y, QtGui.qRgb(254,0,0))        
+        self.emit(SIGNAL('reset'), self.image)
 
     def removeFromCentroidBuffer(self, x):
         self.countX-=1
@@ -124,34 +115,38 @@ class computationThread(QThread):
         self.painter.drawRect(startX, startY, endX-startX, endY-startY)
         if startX > 0:
             self.leftVotes += 1
-            if self.leftVotes >= 3:    
-                threading.Timer(3, self.turnLeft90Degrees).start()
+            if self.leftVotes >= 2:    
+                threading.Timer(1.5, self.turnLeft90Degrees).start()
             else:
-                threading.Timer(3, self.clearLeftVotes).start()
+                threading.Timer(1.5, self.clearLeftVotes).start()
 
         (startX, startY, endX, endY) = self.templateMatch(array, templates[1])
         self.painter.drawRect(startX, startY, endX-startX, endY-startY)
 
         if startX > 0:
             self.rightVotes += 1
-            if self.rightVotes >= 3:
-                t = threading.Timer(3, self.turnRight90Degrees).start()
+            if self.rightVotes >= 2:
+                t = threading.Timer(1.5, self.turnRight90Degrees).start()
             else:
-                t = threading.Timer(3, self.clearRightVotes).start()
+                t = threading.Timer(1.5, self.clearRightVotes).start()
         
     def runAlgorithms(self):
         threading.Timer(1.0/30, self.runAlgorithms).start()
 #       LANE LINE SIMULATION
 #       self.painter.drawLine(100,100,120,127)
-        array = self.QImageToCvMat(self.qimg)
+#        self.drawCentroid()
+        array = self.QImageToCvMat(self.image)
         crop_img = array[100:127, 63:127]
             
 #        if(self.turning == False):    
 #            self.detectTurnsWithTemplateMatching(array)
             
-        self.detectLines(array)        
-        
-#        self.emit(SIGNAL('reset'), self.image)
+        if self.record == True:
+            array = self.QImageToCvMat(self.image)
+
+            self.saveFrame(array)
+
+        self.emit(SIGNAL('reset'), self.image)
     def clearLeftVotes(self):
         self.leftVotes = 0
     def clearRightVotes(self):
@@ -240,10 +235,10 @@ class computationThread(QThread):
         raise NotImplementedException
 
         
-    def detectLines(self, img):
+    def detectLines(self, im):
         '''  Applies contours and hough transform to detect lines '''
-        homographyMatrix = np.matrix('-8.42014397e-01  -9.13836156e-01   1.10386987e+02;1.22808744e-02  -3.46093934e+00   3.46141924e+02;-5.21625321e-05  -1.55665641e-02   1.00000000e+00')
-        im = cv2.warpPerspective(img, homographyMatrix, (128,128))
+#        homographyMatrix = np.matrix('-8.42014397e-01  -9.13836156e-01   1.10386987e+02;1.22808744e-02  -3.46093934e+00   3.46141924e+02;-5.21625321e-05  -1.55665641e-02   1.00000000e+00')
+#        im = cv2.warpPerspective(img, homographyMatrix, (128,128))
 #        rows,cols = im.shape[:2]
 #        imgray = cv2.cvtColor(im,cv2.COLOR_BGR2GRAY)
 #        ret,thresh = cv2.threshold(imgray,125,255,0)
@@ -300,24 +295,22 @@ class computationThread(QThread):
         print "line meets at", intersection
         print "theta", angle
         if angle > 90:
-            self.adjustLeft()
 #            right lane
-#            if intersection < 85:
-#                self.adjustLeft()
-#            elif intersection > 100:
-#                if intersection > 140:
-#                    return
-#                self.adjustRight()
+            if intersection < 85:
+                self.adjustLeft()
+            elif intersection > 100:
+                if intersection > 140:
+                    return
+                self.adjustRight()
                 
         if angle < 90:
-            self.adjustRight()
 #            left lane                    
-#            if intersection < 0:
-#                if intersection < -10:
-#                    return                                
-#                self.adjustLeft()
-#            elif intersection > 20:
-#                self.adjustRight()
+            if intersection < 0:
+                if intersection < -10:
+                    return                                
+                self.adjustLeft()
+            elif intersection > 20:
+                self.adjustRight()
         if angle == 90:
             self.moveForward()
 #        else:
