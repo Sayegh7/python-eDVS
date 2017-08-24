@@ -141,10 +141,10 @@ class computationThread(QThread):
 #        if(self.turning == False):    
 #            self.detectTurnsWithTemplateMatching(array)
             
-        if self.record == True:
-            array = self.QImageToCvMat(self.image)
-
-            self.saveFrame(array)
+#        if self.record == True:
+#            array = self.QImageToCvMat(self.image)
+#
+#            self.saveFrame(array)
 
         self.emit(SIGNAL('reset'), self.image)
     def clearLeftVotes(self):
