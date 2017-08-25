@@ -24,6 +24,8 @@ class computationThread(QThread):
         self.enabled = False
         self.frameNumber = 0
         self.leftVotes = 0
+        self.homographyMatrix = np.matrix('-8.42014397e-01  -9.13836156e-01   1.10386987e+02;1.22808744e-02  -3.46093934e+00   3.46141924e+02;-5.21625321e-05  -1.55665641e-02   1.00000000e+00')
+
         self.leftMotorSpeed = 50
         self.rightMotorSpeed = 50
         self.ser = serial.Serial('COM3', 12000000, timeout=0.1)
@@ -66,11 +68,11 @@ class computationThread(QThread):
                 continue
             self.q.append((x, y))
 
-            self.centroids(x)
+#            self.centroids(x)
 
             if(len(self.q) > 200):
                 (oldx, _) = self.q.popleft()
-                self.removeFromCentroidBuffer(oldx)
+#                self.removeFromCentroidBuffer(oldx)
 
     def removeEventFromQueue(self):
         if(len(self.q) > 0):
@@ -86,7 +88,16 @@ class computationThread(QThread):
         threading.Timer(1.0/30, self.refreshDisplay).start()
         self.image.fill(QtGui.qRgb(255,255,255))
         for x,y in list(self.q):
-            self.image.setPixel(x,y, QtGui.qRgb(254,0,0))        
+            self.image.setPixel(x,y, QtGui.qRgb(254,0,0))
+        array = self.QImageToCvMat(self.image)
+        im = cv2.warpPerspective(array, self.homographyMatrix, (128,128))
+        self.painter.end()
+        self.image = self.toQImage(im)
+        pen = QPen()
+        pen.setWidth(2)
+        pen.setColor(QColor(qRgb(0,255,0)))
+        self.painter.begin(self.image)
+        self.painter.setPen(pen)
         self.emit(SIGNAL('reset'), self.image)
 
     def removeFromCentroidBuffer(self, x):
@@ -134,7 +145,6 @@ class computationThread(QThread):
         threading.Timer(1.0/30, self.runAlgorithms).start()
 #       LANE LINE SIMULATION
 #       self.painter.drawLine(100,100,120,127)
-#        self.drawCentroid()
         array = self.QImageToCvMat(self.image)
         crop_img = array[100:127, 63:127]
             
@@ -143,9 +153,9 @@ class computationThread(QThread):
             
 #        if self.record == True:
 #            array = self.QImageToCvMat(self.image)
-#
+##
 #            self.saveFrame(array)
-
+        self.detectLines(array)
         self.emit(SIGNAL('reset'), self.image)
     def clearLeftVotes(self):
         self.leftVotes = 0
@@ -268,7 +278,7 @@ class computationThread(QThread):
     def drawLinesFromThetas(self, lines):
         if lines is not None:
             
-            x = 4
+            x = 50
             for line in (lines):
                 if x < 0:
                     return
@@ -294,27 +304,16 @@ class computationThread(QThread):
     def steer(self, intersection, angle):
         print "line meets at", intersection
         print "theta", angle
+        if intersection > 150 or intersection < -20:
+            return
         if angle > 90:
 #            right lane
-            if intersection < 85:
-                self.adjustLeft()
-            elif intersection > 100:
-                if intersection > 140:
-                    return
-                self.adjustRight()
-                
+            self.adjustLeft()    
         if angle < 90:
 #            left lane                    
-            if intersection < 0:
-                if intersection < -10:
-                    return                                
-                self.adjustLeft()
-            elif intersection > 20:
-                self.adjustRight()
+            self.adjustRight()
         if angle == 90:
             self.moveForward()
-#        else:
-#            self.moveForward()
     def drawLines(self,lines):
         if lines is not None:
             a,b,c = lines.shape
