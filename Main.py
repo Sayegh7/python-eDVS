@@ -145,6 +145,7 @@ class computationThread(QThread):
 #            array = self.QImageToCvMat(self.image)
 #
 #            self.saveFrame(array)
+#        self.detectLines(array)
 
         self.emit(SIGNAL('reset'), self.image)
     def clearLeftVotes(self):
@@ -292,8 +293,8 @@ class computationThread(QThread):
                 self.steer(int(x) , np.rad2deg(theta))
                 self.painter.drawLine(x1, y1, x2, y2);
     def steer(self, intersection, angle):
-        print "line meets at", intersection
-        print "theta", angle
+#        print "line meets at", intersection
+#        print "theta", angle
         if angle > 90:
 #            right lane
             if intersection < 85:

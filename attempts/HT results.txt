@@ -1,0 +1,10 @@
+6 - 3 but diverted off the track between turn 2 and 3
+7 - 2
+8 - 1 diverted off track
+9 - 1
+10 - 1 followed the lane
+11 - 0
+12 - 2
+13 - 1, didnt recover from corner
+14 - 0
+15 - 0
